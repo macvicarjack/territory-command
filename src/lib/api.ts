@@ -17,3 +17,7 @@ export async function toggleTaskStatus(taskId: string): Promise<void> {
 export async function createOutcome(data: any): Promise<any> {
   console.log("Create outcome logic will be wired to n8n in the next sprint:", data);
 }
+
+export async function addTaskToOutcome(outcomeId: string, task: { description: string; owner: string }): Promise<void> {
+  console.log("Add task logic will be wired to n8n in the next sprint:", outcomeId, task);
+}
