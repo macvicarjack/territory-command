@@ -99,16 +99,21 @@ function getConstraintDot(age_days?: number) {
 }
 
 export default function HitList() {
+
   const { data: dashboard, isLoading, isError } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
     queryFn: async () => {
+      console.log("FETCHING FROM N8N...");
       const res = await fetch("https://roofingsalessystems.app.n8n.cloud/webhook/lovable-territory-data");
       if (!res.ok) throw new Error("API error");
-      return res.json();
+      const json = await res.json();
+      console.log("API DATA RECEIVED:", json);
+      return json;
     },
     refetchInterval: 30000,
     retry: 1,
   });
+
 
 
   const summary = dashboard?.data?.summary || fallbackSummary;
