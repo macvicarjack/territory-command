@@ -104,7 +104,7 @@ export default function HitList() {
     queryKey: ["dashboard"],
     queryFn: async () => {
       console.log("FETCHING FROM N8N...");
-      const res = await fetch("https://roofingsalessystems.app.n8n.cloud/webhook/lovable-territory-data");
+      const res = await fetch("https://course-metadata-bacteria-meet.trycloudflare.com/api/territory/hitlist");
       if (!res.ok) throw new Error("API error");
       const json = await res.json();
       console.log("API DATA RECEIVED:", json);
