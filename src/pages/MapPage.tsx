@@ -1,32 +1,104 @@
 import { useEffect, useRef, useState } from "react";
-import { ACCOUNTS, OUTCOMES, getAccountName, formatCurrency } from "@/lib/mockData";
-import { Account } from "@/types/models";
+import { X, ExternalLink, Phone, Calendar, Building2, MapPin, Navigation } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function tierPinColor(tier: string) {
-  if (tier === "A") return "#ef4444";
-  if (tier === "B") return "#eab308";
-  return "#6b7280";
+interface Account {
+  id: string;
+  name: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
+  phone?: string;
+  website?: string;
+  industry?: string;
+  type?: string;
+  lastActivity?: string;
+  section?: number;
+}
+
+const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
+
+// Color pins by last activity recency
+function getPinColor(dateStr?: string): string {
+  if (!dateStr) return '#ef4444'; // red for no activity
+  
+  const date = new Date(dateStr);
+  const now = new Date();
+  const daysDiff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysDiff < 30) return '#22c55e'; // green for recent
+  if (daysDiff < 90) return '#eab308'; // yellow for stale
+  return '#ef4444'; // red for cold
+}
+
+function formatDate(dateStr?: string) {
+  if (!dateStr) return 'No activity';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatPhone(phone?: string) {
+  if (!phone) return null;
+  return phone;
 }
 
 export default function MapPage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [geocodedCount, setGeocodedCount] = useState(0);
+
+  useEffect(() => {
+    async function fetchAccounts() {
+      try {
+        setLoading(true);
+        const response = await fetch(`${FLASK_TUNNEL}/api/salesforce/accounts-geo`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accounts');
+        }
+        
+        const data = await response.json();
+        setAccounts(data.accounts || []);
+        setGeocodedCount(data.geocoded || 0);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load accounts');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchAccounts();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    async function init() {
+    
+    async function initMap() {
+      if (accounts.length === 0 || !mapRef.current || mapInstanceRef.current) return;
+      
       const L = await import("leaflet");
       await import("leaflet/dist/leaflet.css");
+      
+      if (cancelled || !mapRef.current) return;
 
-      if (cancelled || !mapRef.current || mapInstanceRef.current) return;
-
+      // Create map centered on Rhode Island/New England area
       const map = L.map(mapRef.current, {
-        center: [39.0, -98.0],
-        zoom: 4,
+        center: [41.8, -71.4], // Rhode Island center
+        zoom: 9,
         zoomControl: true,
         attributionControl: false,
       });
@@ -36,89 +108,224 @@ export default function MapPage() {
         maxZoom: 19,
       }).addTo(map);
 
-      // Add pins for first 200 accounts (perf)
-      const displayAccounts = ACCOUNTS.slice(0, 200);
-      displayAccounts.forEach((a) => {
-        const color = tierPinColor(a.revenueTier);
-        const marker = L.circleMarker([a.lat, a.lng], {
-          radius: a.revenueTier === "A" ? 7 : a.revenueTier === "B" ? 5 : 3,
+      // Filter accounts with lat/lng
+      const geocodedAccounts = accounts.filter(a => a.lat && a.lng);
+      
+      // Add markers
+      geocodedAccounts.forEach((account) => {
+        const color = getPinColor(account.lastActivity);
+        
+        const marker = L.circleMarker([account.lat!, account.lng!], {
+          radius: 6,
           fillColor: color,
           color: color,
-          fillOpacity: 0.7,
-          weight: 1,
+          fillOpacity: 0.8,
+          weight: 2,
         }).addTo(map);
 
-        marker.on("click", () => setSelectedAccount(a));
-        marker.bindTooltip(a.name, { className: "map-tooltip" });
+        marker.on("click", () => setSelectedAccount(account));
+        marker.bindTooltip(account.name, { 
+          className: "map-tooltip",
+          direction: "top"
+        });
+        
+        markersRef.current.push(marker);
       });
+
+      // If we have geocoded accounts, fit bounds to show all
+      if (geocodedAccounts.length > 0) {
+        const bounds = L.latLngBounds(geocodedAccounts.map(a => [a.lat!, a.lng!]));
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
 
       mapInstanceRef.current = map;
     }
-    init();
-    return () => { cancelled = true; };
-  }, []);
+    
+    initMap();
+    
+    return () => { 
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markersRef.current = [];
+      }
+    };
+  }, [accounts]);
 
-  const accountOutcomes = selectedAccount
-    ? OUTCOMES.filter((o) => o.accountId === selectedAccount.id)
-    : [];
-
-  // Empty state
-  if (ACCOUNTS.length === 0) {
+  if (loading) {
     return (
       <AppLayout>
         <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
           <div className="text-center">
-            <p className="text-lg text-muted-foreground">No data yet — connect this page to real data.</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading accounts and map...</p>
           </div>
         </div>
       </AppLayout>
     );
   }
 
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
+          <div className="text-center text-red-400">
+            <p>Error loading accounts: {error}</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const geocodedAccounts = accounts.filter(a => a.lat && a.lng);
+
   return (
     <AppLayout>
       <div className="relative flex h-[calc(100vh-3rem)]">
-        <div ref={mapRef} className="flex-1" />
+        {/* Map */}
+        <div ref={mapRef} className="flex-1 bg-card" />
+
+        {/* Legend */}
+        <div className="absolute left-4 top-4 z-[1000] rounded-lg bg-card/95 border border-border p-3 shadow-lg">
+          <h3 className="text-xs font-semibold text-foreground mb-2">Last Activity</h3>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-green-500"></span>
+              <span className="text-muted-foreground">Recent (&lt;30 days)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-yellow-500"></span>
+              <span className="text-muted-foreground">Stale (30-90 days)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-red-500"></span>
+              <span className="text-muted-foreground">Cold (&gt;90 days)</span>
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+            {geocodedCount.toLocaleString()} of {accounts.length.toLocaleString()} mapped
+          </div>
+        </div>
 
         {/* Account Panel */}
         {selectedAccount && (
-          <div className="absolute right-0 top-0 z-[1000] h-full w-80 border-l border-border bg-card p-4 overflow-auto">
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-foreground">{selectedAccount.name}</h2>
-                <p className="text-[10px] text-muted-foreground">
-                  Section {selectedAccount.territorySection} · Tier {selectedAccount.revenueTier} · {formatCurrency(selectedAccount.revenue)}
-                </p>
+          <div className="absolute right-0 top-0 z-[1000] h-full w-80 border-l border-border bg-card overflow-auto shadow-xl">
+            <div className="p-4">
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-foreground">{selectedAccount.name}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedAccount.type || 'Account'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setSelectedAccount(null)} 
+                  className="text-muted-foreground hover:text-foreground p-1"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button onClick={() => setSelectedAccount(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-4 w-4" />
-              </button>
+
+              {/* Address */}
+              <div className="mb-4 p-3 rounded-lg bg-accent/50">
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    {selectedAccount.street && <p>{selectedAccount.street}</p>}
+                    {(selectedAccount.city || selectedAccount.state) && (
+                      <p className="text-muted-foreground">
+                        {selectedAccount.city}{selectedAccount.city && selectedAccount.state ? ', ' : ''}
+                        {selectedAccount.state} {selectedAccount.zip}
+                      </p>
+                    )}
+                    {!selectedAccount.street && !selectedAccount.city && (
+                      <p className="text-muted-foreground">Address not available</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="space-y-3 mb-4">
+                {selectedAccount.industry && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">{selectedAccount.industry}</span>
+                  </div>
+                )}
+                
+                {selectedAccount.phone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <a href={`tel:${selectedAccount.phone}`} className="text-primary hover:underline">
+                      {formatPhone(selectedAccount.phone)}
+                    </a>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className={cn(
+                    "text-xs px-2 py-0.5 rounded-full",
+                    selectedAccount.lastActivity ? (
+                      new Date().getTime() - new Date(selectedAccount.lastActivity).getTime() < 30 * 24 * 60 * 60 * 1000
+                        ? "bg-green-500/10 text-green-400"
+                        : new Date().getTime() - new Date(selectedAccount.lastActivity).getTime() < 90 * 24 * 60 * 60 * 1000
+                        ? "bg-yellow-500/10 text-yellow-400"
+                        : "bg-red-500/10 text-red-400"
+                    ) : "bg-red-500/10 text-red-400"
+                  )}>
+                    Last activity: {formatDate(selectedAccount.lastActivity)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2">
+                {selectedAccount.website && (
+                  <a
+                    href={selectedAccount.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Visit Website
+                  </a>
+                )}
+                
+                {selectedAccount.lat && selectedAccount.lng && (
+                  <a
+                    href={`https://maps.google.com/?q=${selectedAccount.lat},${selectedAccount.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                  >
+                    <Navigation className="h-4 w-4" />
+                    Open in Maps
+                  </a>
+                )}
+              </div>
             </div>
+          </div>
+        )}
 
-            <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Outcomes</h3>
-            {accountOutcomes.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No linked outcomes.</p>
-            ) : (
-              <div className="mb-4 space-y-1.5">
-                {accountOutcomes.map((o) => {
-                  const ct = o.tasks.find((t) => t.constraint);
-                  return (
-                    <div key={o.id} className="rounded-md bg-accent px-2.5 py-2">
-                      <p className="text-xs font-medium text-foreground">{o.title}</p>
-                      {ct && <p className="mt-0.5 text-[10px] text-muted-foreground">⚡ {ct.description}</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <button className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-2 text-xs font-medium text-primary hover:bg-primary/20">
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open in Salesforce Maps
-            </button>
+        {/* Empty state overlay when no geocoded accounts */}
+        {geocodedAccounts.length === 0 && !loading && (
+          <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-card/80">
+            <div className="text-center p-6">
+              <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No Accounts Mapped</h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                Accounts are still being geocoded. This process takes approximately 20 minutes for all {accounts.length} accounts.
+              </p>
+            </div>
           </div>
         )}
       </div>
+      
+      {/* Custom styles for map */}
       <style>{`
         .map-tooltip {
           background: hsl(216 26% 9%) !important;
@@ -137,6 +344,9 @@ export default function MapPage() {
           background: hsl(216 26% 9%) !important;
           color: hsl(0 0% 96%) !important;
           border-color: hsl(216 18% 14%) !important;
+        }
+        .leaflet-container {
+          background: hsl(216 26% 9%) !important;
         }
       `}</style>
     </AppLayout>
