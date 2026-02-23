@@ -1,6 +1,6 @@
 import { Outcome } from "@/types/outcome";
 
-const N8N_BRIDGE = "https://pavilion-desired-facilitate-blue.trycloudflare.com/webhook/lovable-territory-data";
+const N8N_BRIDGE = "https://onion-filter-skins-additions.trycloudflare.com/webhook/lovable-territory-data";
 
 export async function fetchOutcomes(): Promise<Outcome[]> {
   try {
@@ -28,35 +28,9 @@ export async function fetchOutcomes(): Promise<Outcome[]> {
   }
 }
 
-export async function createOutcome(data: {
-  customer_name: string;
-  title: string;
-  first_task: string;
-}): Promise<Outcome> {
-  const newOutcome: Outcome = {
-    id: `out_${Date.now()}`,
-    customer_name: data.customer_name,
-    contact_name: "",
-    title: data.title,
-    status: "active",
-    tasks: [{
-      id: `task_${Date.now()}`,
-      description: data.first_task,
-      owner: "Jack",
-      status: "pending",
-    }],
-    constraint_task_id: `task_${Date.now()}`,
-  };
-  return Promise.resolve(newOutcome);
+export async function createOutcome(data: { customer_name: string; title: string; first_task: string; }): Promise<Outcome> {
+  return Promise.resolve({ id: `out_${Date.now()}`, customer_name: data.customer_name, contact_name: "", title: data.title, status: "active", tasks: [{ id: `task_${Date.now()}`, description: data.first_task, owner: "Jack", status: "pending" }], constraint_task_id: `task_${Date.now()}` });
 }
 
-export async function toggleTaskStatus(taskId: string): Promise<void> {
-  return Promise.resolve();
-}
-
-export async function addTaskToOutcome(
-  outcomeId: string,
-  task: { description: string; owner: string }
-): Promise<void> {
-  return Promise.resolve();
-}
+export async function toggleTaskStatus(taskId: string): Promise<void> { return Promise.resolve(); }
+export async function addTaskToOutcome(outcomeId: string, task: { description: string; owner: string }): Promise<void> { return Promise.resolve(); }
