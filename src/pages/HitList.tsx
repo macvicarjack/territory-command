@@ -1,236 +1,217 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchOutcomes, toggleTaskStatus } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
-  Plus,
-  CheckCircle2,
-  Circle,
-  ArrowRight,
-  ClipboardList,
-  MapPin,
-  FileText,
   DollarSign,
+  AlertTriangle,
+  Target,
   Clock,
-  TrendingUp,
-  Activity,
+  Circle,
 } from "lucide-react";
-import { Outcome, Task } from "@/types/outcome";
-import DashboardLayout from "@/components/DashboardLayout";
+import AppLayout from "@/components/AppLayout";
 
-function getJackTasks(outcomes: Outcome[]): { outcome: Outcome; task: Task }[] {
-  return outcomes
-    .filter((o) => o.status === "active")
-    .flatMap((o) =>
-      o.tasks
-        .filter((t) => t.owner === "Jack" && t.status === "pending")
-        .map((t) => ({ outcome: o, task: t }))
-    )
-    .slice(0, 6);
+interface DashboardData {
+  status: string;
+  data: {
+    summary: {
+      total_active_outcomes: number;
+      total_jack_blockers: number;
+      open_quotes_total: number;
+      backorders_total: number;
+    };
+    top_constraints: Array<{
+      customer: string;
+      task: string;
+      revenue: number;
+      tier: string;
+      age_days?: number;
+    }>;
+    aging_risks?: Array<{
+      title: string;
+      customer: string;
+      revenue: number;
+      age_days: number;
+    }>;
+    schedule?: Array<{
+      time: string;
+      label: string;
+    }>;
+    action_list?: Array<{
+      task: string;
+      customer: string;
+    }>;
+  };
 }
 
-function getPipelineDeals(outcomes: Outcome[]) {
-  return outcomes.filter((o) => o.status === "active" || o.status === "deferred");
-}
+const fallbackSummary = {
+  total_active_outcomes: 7,
+  total_jack_blockers: 3,
+  open_quotes_total: 1000000,
+  backorders_total: 135000,
+};
 
-function getStatusTag(outcome: Outcome) {
-  const constraint = outcome.tasks.find((t) => t.id === outcome.constraint_task_id);
-  if (!constraint) return { label: "Active", color: "bg-primary/15 text-primary" };
-  if (constraint.status === "done") return { label: "Progressing", color: "bg-status-done/15 text-status-done" };
-  if (constraint.owner === "Jack") return { label: "Follow-up", color: "bg-owner-jack/15 text-owner-jack" };
-  return { label: "Waiting", color: "bg-owner-other/15 text-owner-other" };
-}
-
-const recentActivity = [
-  { text: "Sent revised proposal to Acme Corp", time: "2h ago" },
-  { text: "Completed security review for Nexus Health", time: "5h ago" },
-  { text: "Added new lead: Summit Partners", time: "1d ago" },
-  { text: "Closed integration docs for TechFlow", time: "2d ago" },
+const fallbackConstraints = [
+  { customer: "Global Dynamics", task: "Prepare ROI analysis from Year 1 data", revenue: 320000, tier: "A", age_days: 45 },
+  { customer: "Nexus Health", task: "Demo to selection committee", revenue: 150000, tier: "A", age_days: 30 },
+  { customer: "Summit Partners", task: "Wait for Q2 budget cycle to open", revenue: 75000, tier: "B", age_days: 60 },
+  { customer: "TechFlow Inc", task: "Deliver integration documentation", revenue: 180000, tier: "A", age_days: 22 },
+  { customer: "Acme Corp", task: "Send revised proposal with updated pricing", revenue: 250000, tier: "A", age_days: 14 },
 ];
 
+const fallbackAgingRisks = [
+  { title: "Land Initial POC — New Logo Acquisition", customer: "Summit Partners", revenue: 75000, age_days: 68 },
+  { title: "Secure Multi-Year Renewal — Prevent Churn", customer: "Global Dynamics", revenue: 320000, age_days: 45 },
+  { title: "Win Competitive Displacement — Replace Legacy", customer: "Nexus Health", revenue: 150000, age_days: 30 },
+  { title: "Expand Pilot to Full Deployment — 500 Seats", customer: "TechFlow Inc", revenue: 180000, age_days: 22 },
+  { title: "Convert Pilot to Annual Contract", customer: "Beacon Logistics", revenue: 120000, age_days: 18 },
+];
+
+const fallbackSchedule = [
+  { time: "09:00", label: "Acme Corp — Pricing Review" },
+  { time: "11:00", label: "TechFlow — Integration Check-in" },
+  { time: "14:00", label: "Nexus Health — Demo Prep" },
+];
+
+const fallbackActions = [
+  { task: "Send revised proposal with updated pricing", customer: "Acme Corp" },
+  { task: "Run training session for ops team", customer: "TechFlow Inc" },
+  { task: "Prepare ROI analysis from Year 1 data", customer: "Global Dynamics" },
+  { task: "Demo to selection committee", customer: "Nexus Health" },
+  { task: "Schedule executive apology call", customer: "Cortland Manufacturing" },
+  { task: "Draft annual pricing proposal", customer: "Beacon Logistics" },
+];
+
+function formatCurrency(value: number) {
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  return `$${value}`;
+}
+
+function getAgeDayColor(days: number) {
+  if (days >= 60) return "text-red-400";
+  if (days >= 30) return "text-yellow-400";
+  return "text-orange-400";
+}
+
+function getConstraintDot(age_days?: number) {
+  if (!age_days) return "bg-owner-jack";
+  if (age_days >= 30) return "bg-red-400";
+  return "bg-yellow-400";
+}
+
 export default function HitList() {
-  const queryClient = useQueryClient();
-  const { data: outcomes = [], isLoading } = useQuery({
-    queryKey: ["outcomes"],
-    queryFn: fetchOutcomes,
+
+  const { data: dashboard, isLoading, isError } = useQuery<DashboardData>({
+    queryKey: ["dashboard"],
+    queryFn: async () => {
+      console.log("FETCHING FROM N8N...");
+      const res = await fetch("https://roofingsalessystems.app.n8n.cloud/webhook/lovable-territory-data");
+      if (!res.ok) throw new Error("API error");
+      const json = await res.json();
+      console.log("API DATA RECEIVED:", json);
+      return json;
+    },
+    refetchInterval: 30000,
+    retry: 1,
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: toggleTaskStatus,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["outcomes"] }),
-  });
 
-  const jackTasks = getJackTasks(outcomes);
-  const pipeline = getPipelineDeals(outcomes);
-  const active = outcomes.filter((o) => o.status === "active");
-  const totalTasks = outcomes.reduce((sum, o) => sum + o.tasks.length, 0);
-  const doneTasks = outcomes.reduce((sum, o) => sum + o.tasks.filter((t) => t.status === "done").length, 0);
-  const jackBlockers = outcomes.filter((o) => {
-    const c = o.tasks.find((t) => t.id === o.constraint_task_id);
-    return c && c.owner === "Jack" && c.status === "pending";
-  }).length;
 
-  if (isLoading) {
+  const summary = dashboard?.data?.summary || fallbackSummary;
+  const constraints = dashboard?.data?.top_constraints || (dashboard ? [] : fallbackConstraints);
+  const agingRisks = dashboard?.data?.aging_risks || (dashboard ? [] : fallbackAgingRisks);
+  const schedule = dashboard?.data?.schedule || (dashboard ? [] : fallbackSchedule);
+  const actions = dashboard?.data?.action_list || (dashboard ? [] : fallbackActions);
+
+
+  if (isLoading && !isError) {
     return (
-      <DashboardLayout>
-        <div className="flex h-full items-center justify-center">
+      <AppLayout>
+        <div className="flex h-[80vh] items-center justify-center">
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
-      </DashboardLayout>
+      </AppLayout>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="p-6 lg:p-8">
+    <AppLayout>
+      <div className="p-4 lg:p-6">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Command Center</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {active.length} active deals · {jackBlockers} blockers on you
-            </p>
-          </div>
-          <Link
-            to="/new"
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            New Lead
-          </Link>
+        <h1 className="mb-5 text-xl font-bold text-foreground">Command Center</h1>
+
+        {/* KPI Strip */}
+        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <KpiCard label="OPEN QUOTES" value={formatCurrency(summary.open_quotes_total)} icon={<DollarSign className="h-4 w-4 text-primary" />} />
+          <KpiCard label="BACKORDERS" value={formatCurrency(summary.backorders_total)} icon={<AlertTriangle className="h-4 w-4 text-yellow-400" />} />
+          <KpiCard label="ACTIVE OUTCOMES" value={String(summary.total_active_outcomes)} icon={<Target className="h-4 w-4 text-muted-foreground" />} />
+          <KpiCard label="JACK BLOCKERS" value={String(summary.total_jack_blockers)} icon={<Clock className="h-4 w-4 text-red-400" />} />
         </div>
 
-        {/* Metrics Strip */}
-        <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: "Active Deals", value: active.length, icon: TrendingUp },
-            { label: "Your Blockers", value: jackBlockers, icon: Clock },
-            { label: "Tasks Done", value: `${doneTasks}/${totalTasks}`, icon: CheckCircle2 },
-            { label: "Completion", value: totalTasks ? `${Math.round((doneTasks / totalTasks) * 100)}%` : "0%", icon: Activity },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-lg bg-card p-4 glow-hover"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {stat.label}
-                </p>
-                <stat.icon className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-foreground">{stat.value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Main Grid: 3 columns */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Today Panel */}
-          <div className="lg:col-span-1">
-            <div className="rounded-lg bg-card p-5">
-              <h2 className="mb-4 text-lg font-bold text-foreground">Today</h2>
-              {jackTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No pending tasks. Nice work.</p>
-              ) : (
-                <div className="space-y-2">
-                  {jackTasks.map(({ outcome, task }) => (
-                    <div
-                      key={task.id}
-                      className="group flex items-start gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-accent"
-                    >
-                      <button
-                        onClick={() => toggleMutation.mutate(task.id)}
-                        className="mt-0.5 shrink-0"
-                      >
-                        {task.status === "done" ? (
-                          <CheckCircle2 className="h-4 w-4 text-status-done" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                        )}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-snug text-foreground">
-                          {task.description}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {outcome.customer_name}
-                        </p>
-                      </div>
-                      <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-owner-jack" />
-                    </div>
-                  ))}
+        {/* 3-Column Grid */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* Break These Constraints Today */}
+          <div className="rounded-lg bg-card p-5">
+            <h2 className="mb-4 text-base font-bold text-foreground">Break These Constraints Today</h2>
+            <div className="space-y-3">
+              {constraints.map((c, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${getConstraintDot(c.age_days)}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">{c.task}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {c.customer} · {formatCurrency(c.revenue)} · {c.age_days || 0}d
+                    </p>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
+          </div>
 
-            {/* Quick Actions */}
-            <div className="mt-4 rounded-lg bg-card p-5">
-              <h2 className="mb-4 text-lg font-bold text-foreground">Quick Actions</h2>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { icon: ClipboardList, label: "Add Task" },
-                  { icon: MapPin, label: "Log Visit" },
-                  { icon: FileText, label: "New Quote" },
-                ].map((action) => (
-                  <button
-                    key={action.label}
-                    className="flex flex-col items-center gap-2 rounded-lg bg-accent p-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                  >
-                    <action.icon className="h-5 w-5" />
-                    {action.label}
-                  </button>
+          {/* Aging Risk */}
+          <div className="rounded-lg bg-card p-5">
+            <h2 className="mb-4 text-base font-bold text-foreground">Aging Risk</h2>
+            <div className="space-y-3">
+              {agingRisks.map((r, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className={`mt-0.5 shrink-0 text-xs font-bold tabular-nums ${getAgeDayColor(r.age_days)}`}>
+                    {r.age_days}d
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">{r.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.customer} · {formatCurrency(r.revenue)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Column: Schedule + Action List */}
+          <div className="space-y-4">
+            {/* Today's Schedule */}
+            <div className="rounded-lg bg-card p-5">
+              <h2 className="mb-4 text-base font-bold text-foreground">Today's Schedule</h2>
+              <div className="space-y-2.5">
+                {schedule.map((s, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="shrink-0 font-mono text-xs font-semibold text-primary">{s.time}</span>
+                    <p className="text-sm text-foreground">{s.label}</p>
+                  </div>
                 ))}
               </div>
             </div>
-          </div>
 
-          {/* Pipeline Panel */}
-          <div className="lg:col-span-2">
+            {/* Your Action List */}
             <div className="rounded-lg bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-foreground">Pipeline</h2>
-                <span className="text-xs text-muted-foreground">{pipeline.length} deals</span>
-              </div>
-              <div className="space-y-1">
-                {pipeline.map((o) => {
-                  const tag = getStatusTag(o);
-                  const doneCt = o.tasks.filter((t) => t.status === "done").length;
-                  return (
-                    <Link
-                      key={o.id}
-                      to={`/outcome/${o.id}`}
-                      className="group flex items-center gap-4 rounded-md px-3 py-3 transition-colors hover:bg-accent"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                          {o.customer_name}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {o.title}
-                        </p>
-                      </div>
-                      <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${tag.color}`}>
-                        {tag.label}
-                      </span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {doneCt}/{o.tasks.length}
-                      </span>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Activity Feed */}
-            <div className="mt-4 rounded-lg bg-card p-5">
-              <h2 className="mb-4 text-lg font-bold text-foreground">Recent Activity</h2>
-              <div className="space-y-3">
-                {recentActivity.map((item, i) => (
+              <h2 className="mb-4 text-base font-bold text-foreground">Your Action List</h2>
+              <div className="space-y-2.5">
+                {actions.map((a, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-foreground">{item.text}</p>
-                      <p className="text-xs text-muted-foreground">{item.time}</p>
+                      <p className="text-sm text-foreground">{a.task}</p>
+                      <p className="text-xs text-muted-foreground">{a.customer}</p>
                     </div>
                   </div>
                 ))}
@@ -239,6 +220,18 @@ export default function HitList() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AppLayout>
+  );
+}
+
+function KpiCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return (
+    <div className="rounded-lg bg-card p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+        {icon}
+      </div>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
+    </div>
   );
 }
