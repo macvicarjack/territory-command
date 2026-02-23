@@ -1,32 +1,206 @@
-import { useState } from "react";
-import { OUTCOMES, getAccountName, formatCurrency } from "@/lib/mockData";
-import { Outcome } from "@/types/models";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
-import { X, CheckCircle2, Circle, Plus, ArrowRight } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Star, AlertCircle, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function statusColor(status: string) {
-  if (status === "At Risk") return "bg-status-risk/15 text-status-risk";
-  if (status === "Verified") return "bg-status-verified/15 text-status-verified";
-  return "bg-primary/15 text-primary";
+interface Task {
+  id: string;
+  description: string;
+  owner: string;
+  status: "pending" | "completed";
+  age_days: number;
+  created_date: string;
 }
 
-function ownerColor(owner: string) {
-  return owner === "Jack" ? "text-status-risk" : "text-status-waiting";
+interface Outcome {
+  id: string;
+  customer_name: string;
+  title: string;
+  status: "active" | "at_risk" | "completed" | "deferred";
+  tasks: Task[];
+  constraint_task_id: string | null;
+  revenue_ytd: number;
+  tier: "A" | "B" | "C";
+  created_date: string;
+}
+
+interface DashboardData {
+  outcomes: Outcome[];
+}
+
+const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
+
+function formatCurrency(value: number): string {
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  return `$${value}`;
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case "active":
+      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/20";
+    case "at_risk":
+      return "bg-amber-500/15 text-amber-400 border-amber-500/20";
+    case "completed":
+      return "bg-slate-500/15 text-slate-400 border-slate-500/20";
+    case "deferred":
+      return "bg-purple-500/15 text-purple-400 border-purple-500/20";
+    default:
+      return "bg-slate-500/15 text-slate-400 border-slate-500/20";
+  }
+}
+
+function getStatusDot(status: string): string {
+  switch (status) {
+    case "active":
+      return "bg-emerald-500";
+    case "at_risk":
+      return "bg-amber-500";
+    case "completed":
+      return "bg-slate-500";
+    case "deferred":
+      return "bg-purple-500";
+    default:
+      return "bg-slate-500";
+  }
+}
+
+function getOwnerColor(owner: string): string {
+  const lower = owner.toLowerCase();
+  if (lower === "jack") {
+    return "bg-blue-500/15 text-blue-400 border-blue-500/20";
+  }
+  if (lower === "customer") {
+    return "bg-orange-500/15 text-orange-400 border-orange-500/20";
+  }
+  if (lower === "vendor") {
+    return "bg-purple-500/15 text-purple-400 border-purple-500/20";
+  }
+  return "bg-slate-500/15 text-slate-400 border-slate-500/20";
+}
+
+function getTierColor(tier: string): string {
+  switch (tier) {
+    case "A":
+      return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 font-semibold";
+    case "B":
+      return "bg-blue-500/20 text-blue-400 border-blue-500/30 font-semibold";
+    case "C":
+      return "bg-slate-500/20 text-slate-400 border-slate-500/30 font-semibold";
+    default:
+      return "bg-slate-500/20 text-slate-400 border-slate-500/30";
+  }
+}
+
+function calculateOutcomeAge(outcome: Outcome): number {
+  const created = new Date(outcome.created_date);
+  const now = new Date();
+  return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export default function OutcomesPage() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = OUTCOMES.find((o) => o.id === selectedId);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [checkedTasks, setCheckedTasks] = useState<Set<string>>(new Set());
 
-  // Empty state with API note
-  if (OUTCOMES.length === 0) {
+  const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
+    queryKey: ["outcomes-dashboard"],
+    queryFn: async () => {
+      const res = await fetch(`${FLASK_TUNNEL}/api/territory/dashboard`);
+      if (!res.ok) throw new Error("Failed to fetch outcomes");
+      return res.json();
+    },
+    refetchInterval: 60000,
+    retry: 2,
+  });
+
+  const outcomes = dashboard?.outcomes || [];
+
+  // Get unique owners from tasks for filter
+  const uniqueOwners = useMemo(() => {
+    const owners = new Set<string>();
+    outcomes.forEach((o) => {
+      // Find constraint task owner
+      if (o.constraint_task_id) {
+        const constraintTask = o.tasks.find((t) => t.id === o.constraint_task_id);
+        if (constraintTask) {
+          owners.add(constraintTask.owner);
+        }
+      }
+    });
+    return Array.from(owners).sort();
+  }, [outcomes]);
+
+  // Filter and sort outcomes
+  const filteredAndSortedOutcomes = useMemo(() => {
+    let filtered = outcomes;
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((o) => o.status === statusFilter);
+    }
+
+    // Filter by constraint owner
+    if (ownerFilter !== "all") {
+      filtered = filtered.filter((o) => {
+        if (!o.constraint_task_id) return false;
+        const constraintTask = o.tasks.find((t) => t.id === o.constraint_task_id);
+        return constraintTask?.owner === ownerFilter;
+      });
+    }
+
+    // Sort: At Risk first, then Active, then by revenue descending
+    return [...filtered].sort((a, b) => {
+      const statusPriority: Record<string, number> = { at_risk: 0, active: 1, deferred: 2, completed: 3 };
+      const aPriority = statusPriority[a.status] ?? 99;
+      const bPriority = statusPriority[b.status] ?? 99;
+
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+
+      return b.revenue_ytd - a.revenue_ytd;
+    });
+  }, [outcomes, statusFilter, ownerFilter]);
+
+  const toggleTask = (taskId: string) => {
+    setCheckedTasks((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex h-[calc(100vh-3rem)] flex-col items-center justify-center">
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Loading outcomes...</span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
           <div className="text-center">
-            <p className="text-lg text-muted-foreground">No data yet — connect this page to real data.</p>
-            <p className="mt-2 text-sm text-muted-foreground">Connect to /api/territory/dashboard for real outcomes</p>
+            <AlertCircle className="mx-auto h-8 w-8 text-destructive" />
+            <p className="mt-2 text-muted-foreground">Failed to load outcomes</p>
+            <p className="text-xs text-muted-foreground">{(error as Error).message}</p>
           </div>
         </div>
       </AppLayout>
@@ -35,105 +209,181 @@ export default function OutcomesPage() {
 
   return (
     <AppLayout>
-      <div className="flex h-[calc(100vh-3rem)]">
-        {/* Table */}
-        <div className={cn("flex-1 overflow-auto p-4", selected && "hidden lg:block")}>
-          <h1 className="mb-4 text-xl font-bold text-foreground">Outcomes</h1>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  <th className="px-3 py-2">Outcome</th>
-                  <th className="px-3 py-2">Account</th>
-                  <th className="px-3 py-2 text-right">Value</th>
-                  <th className="px-3 py-2">Blocking Constraint</th>
-                  <th className="px-3 py-2">Owner</th>
-                  <th className="px-3 py-2 text-right">Days</th>
-                  <th className="px-3 py-2">Last Move</th>
-                  <th className="px-3 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {OUTCOMES.map((o) => {
-                  const ct = o.tasks.find((t) => t.constraint);
-                  return (
-                    <tr
-                      key={o.id}
-                      onClick={() => setSelectedId(o.id)}
-                      className={cn(
-                        "cursor-pointer border-b border-border/50 transition-colors hover:bg-accent",
-                        selectedId === o.id && "bg-accent"
-                      )}
-                    >
-                      <td className="max-w-[200px] truncate px-3 py-2.5 font-medium text-foreground">{o.title}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground">{getAccountName(o.accountId)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-foreground">{formatCurrency(o.value)}</td>
-                      <td className="max-w-[180px] truncate px-3 py-2.5 text-foreground">{ct?.description ?? "—"}</td>
-                      <td className={cn("px-3 py-2.5 font-medium", ownerColor(o.constraintOwner))}>{o.constraintOwner}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{o.daysActive}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground">{o.lastMovementDate}</td>
-                      <td className="px-3 py-2.5">
-                        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", statusColor(o.status))}>{o.status}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <div className="p-4 lg:p-6">
+        {/* Header */}
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Outcomes</h1>
+            <p className="text-sm text-muted-foreground">
+              {outcomes.length} total · {filteredAndSortedOutcomes.length} showing
+            </p>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-wrap gap-2">
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="at_risk">At Risk</option>
+              <option value="completed">Completed</option>
+              <option value="deferred">Deferred</option>
+            </select>
+
+            {/* Owner Filter */}
+            <select
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="all">All Constraint Owners</option>
+              {uniqueOwners.map((owner) => (
+                <option key={owner} value={owner}>
+                  {owner}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Detail Drawer */}
-        {selected && (
-          <div className="w-full border-l border-border bg-card lg:w-[400px]">
-            <div className="flex h-full flex-col overflow-auto p-4">
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", statusColor(selected.status))}>{selected.status}</span>
-                  <h2 className="mt-2 text-sm font-bold text-foreground">{selected.title}</h2>
-                  <p className="text-xs text-muted-foreground">{getAccountName(selected.accountId)} · {formatCurrency(selected.value)}</p>
-                </div>
-                <button onClick={() => setSelectedId(null)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+        {/* Outcomes Grid */}
+        {filteredAndSortedOutcomes.length === 0 ? (
+          <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border">
+            <p className="text-muted-foreground">No outcomes match your filters</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredAndSortedOutcomes.map((outcome) => {
+              const constraintTask = outcome.constraint_task_id
+                ? outcome.tasks.find((t) => t.id === outcome.constraint_task_id)
+                : null;
+              const outcomeAge = calculateOutcomeAge(outcome);
 
-              {/* Tasks */}
-              <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tasks</h3>
-              <div className="mb-4 space-y-1">
-                {/* Constraint pinned */}
-                {selected.tasks.filter((t) => t.constraint).map((t) => (
-                  <div key={t.id} className="flex items-start gap-2 rounded-md border border-status-risk/20 bg-status-risk-bg px-2.5 py-2">
-                    {t.status === "done" ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-status-done" /> : <Circle className="mt-0.5 h-3.5 w-3.5 text-status-risk" />}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-foreground">{t.description}</p>
-                      <p className="text-[10px] text-muted-foreground">⚡ Constraint · {t.owner}</p>
+              return (
+                <Card
+                  key={outcome.id}
+                  className={cn(
+                    "overflow-hidden border-border bg-card transition-shadow hover:shadow-md",
+                    outcome.status === "at_risk" && "border-amber-500/30 ring-1 ring-amber-500/20"
+                  )}
+                >
+                  <CardHeader className="space-y-3 pb-3">
+                    {/* Customer Name + Badges Row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <h2 className="text-base font-bold text-foreground line-clamp-1">
+                        {outcome.customer_name}
+                      </h2>
+                      <div className="flex shrink-0 gap-1.5">
+                        <Badge variant="outline" className={cn("text-xs", getTierColor(outcome.tier))}>
+                          {outcome.tier}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {selected.tasks.filter((t) => !t.constraint).map((t) => (
-                  <div key={t.id} className="flex items-start gap-2 rounded-md px-2.5 py-2 hover:bg-accent">
-                    {t.status === "done" ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-status-done" /> : <Circle className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />}
-                    <div className="min-w-0 flex-1">
-                      <p className={cn("text-xs", t.status === "done" ? "text-muted-foreground line-through" : "text-foreground")}>{t.description}</p>
-                      <p className="text-[10px] text-muted-foreground">{t.owner}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
 
-              {/* Notes */}
-              <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Notes</h3>
-              <div className="mb-4 space-y-1.5">
-                {selected.notes.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No notes yet.</p>
-                ) : (
-                  selected.notes.map((n, i) => (
-                    <p key={i} className="rounded-md bg-accent px-2.5 py-2 text-xs text-foreground">{n}</p>
-                  ))
-                )}
-              </div>
-            </div>
+                    {/* Revenue Badge */}
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs font-mono">
+                        {formatCurrency(outcome.revenue_ytd)}
+                      </Badge>
+                    </div>
+
+                    {/* Outcome Title */}
+                    <p className="text-sm text-foreground/90 line-clamp-2">{outcome.title}</p>
+
+                    {/* Status + Age Row */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("h-2 w-2 rounded-full", getStatusDot(outcome.status))} />
+                        <Badge variant="outline" className={cn("text-[10px] uppercase tracking-wide", getStatusColor(outcome.status))}>
+                          {outcome.status.replace("_", " ")}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>{outcomeAge}d</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="pt-0">
+                    <div className="border-t border-border pt-3">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Tasks
+                      </p>
+
+                      {/* Tasks List */}
+                      <div className="space-y-2">
+                        {outcome.tasks.map((task) => {
+                          const isConstraint = task.id === outcome.constraint_task_id;
+                          const isChecked = task.status === "completed" || checkedTasks.has(task.id);
+
+                          return (
+                            <div
+                              key={task.id}
+                              className={cn(
+                                "flex items-start gap-2 rounded-md p-1.5 transition-colors",
+                                isConstraint && "bg-amber-500/5 border border-amber-500/20",
+                                !isConstraint && "hover:bg-accent"
+                              )}
+                            >
+                              <Checkbox
+                                id={task.id}
+                                checked={isChecked}
+                                onCheckedChange={() => toggleTask(task.id)}
+                                className="mt-0.5"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <label
+                                  htmlFor={task.id}
+                                  className={cn(
+                                    "block cursor-pointer text-xs leading-relaxed",
+                                    isChecked && "text-muted-foreground line-through",
+                                    !isChecked && "text-foreground"
+                                  )}
+                                >
+                                  {task.description}
+                                </label>
+                                <div className="mt-1 flex items-center gap-2">
+                                  {isConstraint && (
+                                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                  )}
+                                  <Badge
+                                    variant="outline"
+                                    className={cn("text-[10px] px-1.5 py-0", getOwnerColor(task.owner))}
+                                  >
+                                    {task.owner}
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {task.age_days}d
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Constraint Summary */}
+                      {constraintTask && (
+                        <div className="mt-3 rounded-md bg-amber-500/5 border border-amber-500/20 p-2">
+                          <div className="flex items-center gap-1.5 text-[10px] text-amber-400">
+                            <AlertCircle className="h-3 w-3" />
+                            <span className="font-medium uppercase tracking-wide">Current Constraint</span>
+                          </div>
+                          <p className="mt-1 text-xs text-foreground/90 line-clamp-1">
+                            {constraintTask.description}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
