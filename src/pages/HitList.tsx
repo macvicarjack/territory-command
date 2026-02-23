@@ -47,12 +47,36 @@ const recentActivity = [
   { text: "Closed integration docs for TechFlow", time: "2d ago" },
 ];
 
+
+interface DashboardData {
+  status: string;
+  data: {
+    summary: {
+      total_active_outcomes: number;
+      total_jack_blockers: number;
+    };
+    top_constraints: Array<{
+      customer: string;
+      task: string;
+      revenue: number;
+      tier: string;
+    }>;
+  };
+}
+
 export default function HitList() {
   const queryClient = useQueryClient();
-  const { data: outcomes = [], isLoading } = useQuery({
-    queryKey: ["outcomes"],
-    queryFn: fetchOutcomes,
+  const { data: dashboard, isLoading } = useQuery<DashboardData>({
+    queryKey: ["dashboard"],
+    queryFn: async () => {
+      const res = await fetch("https://roofingsalessystems.app.n8n.cloud/webhook/lovable-territory-data");
+      if (!res.ok) throw new Error("API error");
+      return res.json();
+    },
+    refetchInterval: 30000,
   });
+
+  const outcomes: any[] = [];
 
   const toggleMutation = useMutation({
     mutationFn: toggleTaskStatus,
@@ -87,7 +111,7 @@ export default function HitList() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Command Center</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {active.length} active deals · {jackBlockers} blockers on you
+              {dashboard?.data.summary.total_active_outcomes || 0} active deals · {dashboard?.data.summary.total_jack_blockers || 0} blockers on you
             </p>
           </div>
           <Link
@@ -132,27 +156,20 @@ export default function HitList() {
                 <p className="text-sm text-muted-foreground">No pending tasks. Nice work.</p>
               ) : (
                 <div className="space-y-2">
-                  {jackTasks.map(({ outcome, task }) => (
+                  {dashboard?.data.top_constraints.map((c, i) => (
                     <div
-                      key={task.id}
+                      key={i}
                       className="group flex items-start gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-accent"
                     >
-                      <button
-                        onClick={() => toggleMutation.mutate(task.id)}
-                        className="mt-0.5 shrink-0"
-                      >
-                        {task.status === "done" ? (
-                          <CheckCircle2 className="h-4 w-4 text-status-done" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                        )}
-                      </button>
+                      <div className="mt-1.5 shrink-0">
+                        <Circle className="h-4 w-4 text-muted-foreground" />
+                      </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm leading-snug text-foreground">
-                          {task.description}
+                          {c.task}
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {outcome.customer_name}
+                          {c.customer} · {c.tier}-tier
                         </p>
                       </div>
                       <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-owner-jack" />
