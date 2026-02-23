@@ -8,9 +8,7 @@ export default {
     container: {
       center: true,
       padding: "1.5rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
       fontFamily: {
@@ -50,14 +48,20 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "status-risk": "hsl(var(--status-risk))",
+        "status-risk-bg": "hsl(var(--status-risk-bg))",
+        "status-waiting": "hsl(var(--status-waiting))",
+        "status-waiting-bg": "hsl(var(--status-waiting-bg))",
+        "status-verified": "hsl(var(--status-verified))",
+        "status-verified-bg": "hsl(var(--status-verified-bg))",
         "owner-jack": "hsl(var(--owner-jack))",
         "owner-jack-bg": "hsl(var(--owner-jack-bg))",
         "owner-other": "hsl(var(--owner-other))",
         "owner-other-bg": "hsl(var(--owner-other-bg))",
         "status-done": "hsl(var(--status-done))",
         "status-done-bg": "hsl(var(--status-done-bg))",
-        constraint: "hsl(var(--constraint))",
         "surface-elevated": "hsl(var(--surface-elevated))",
+        topnav: "hsl(var(--topnav))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
