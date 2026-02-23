@@ -16,6 +16,19 @@ function boStatusColor(status: string) {
 }
 
 export default function PipelinePage() {
+  // Empty state
+  if (QUOTES.length === 0 && BACKORDERS.length === 0) {
+    return (
+      <AppLayout>
+        <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-muted-foreground">No data yet — connect this page to real data.</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="p-4 lg:p-6">

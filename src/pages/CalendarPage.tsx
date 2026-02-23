@@ -16,6 +16,19 @@ export default function CalendarPage() {
     })
     .filter((x) => x.constraint);
 
+  // Empty state
+  if (CALENDAR_EVENTS.length === 0 && ACCOUNTS.length === 0) {
+    return (
+      <AppLayout>
+        <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-muted-foreground">No data yet — connect this page to real data.</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-3rem)]">
@@ -48,7 +61,9 @@ export default function CalendarPage() {
                               e.type === "Visit" ? "bg-status-verified/15 text-status-verified" :
                               e.type === "Meeting" ? "bg-primary/15 text-primary" :
                               "bg-muted text-muted-foreground"
-                            )}>{e.type}</span>
+                            )}>
+                              {e.type}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -60,22 +75,22 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Right panel */}
-        <div className="w-72 shrink-0 border-l border-border bg-card p-4 overflow-auto">
+        {/* Sidebar */}
+        <aside className="w-72 border-l border-border bg-card p-4">
           <h2 className="mb-3 text-sm font-bold text-foreground">Tier A — Pending Constraints</h2>
-          {todayTierA.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No pending Tier A constraints.</p>
-          ) : (
-            <div className="space-y-2">
-              {todayTierA.map(({ account, constraint }) => (
-                <div key={account.id} className="rounded-md bg-accent px-2.5 py-2">
+          <div className="space-y-2">
+            {todayTierA.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No pending constraints</p>
+            ) : (
+              todayTierA.map(({ account, constraint }) => (
+                <div key={account.id} className="rounded-md bg-accent p-2.5">
                   <p className="text-xs font-medium text-foreground">{account.name}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">⚡ {constraint.description}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{constraint?.title}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              ))
+            )}
+          </div>
+        </aside>
       </div>
     </AppLayout>
   );

@@ -15,6 +15,19 @@ export default function EmailBridgePage() {
   const selected = EMAILS.find((e) => e.id === selectedId);
   const linkedOutcome = selected?.linkedOutcomeId ? OUTCOMES.find((o) => o.id === selected.linkedOutcomeId) : null;
 
+  // Empty state
+  if (EMAILS.length === 0) {
+    return (
+      <AppLayout>
+        <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-muted-foreground">No data yet — connect this page to real data.</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-3rem)]">

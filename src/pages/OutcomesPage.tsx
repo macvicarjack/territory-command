@@ -19,6 +19,20 @@ export default function OutcomesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = OUTCOMES.find((o) => o.id === selectedId);
 
+  // Empty state with API note
+  if (OUTCOMES.length === 0) {
+    return (
+      <AppLayout>
+        <div className="flex h-[calc(100vh-3rem)] flex-col items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-muted-foreground">No data yet — connect this page to real data.</p>
+            <p className="mt-2 text-sm text-muted-foreground">Connect to /api/territory/dashboard for real outcomes</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-3rem)]">

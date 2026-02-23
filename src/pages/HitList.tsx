@@ -43,42 +43,15 @@ interface DashboardData {
 }
 
 const fallbackSummary = {
-  total_active_outcomes: 7,
-  total_jack_blockers: 3,
-  open_quotes_total: 1000000,
-  backorders_total: 135000,
+  open_quotes_total: 0,
+  backorders_total: 0,
+  total_active_outcomes: 0,
+  total_jack_blockers: 0,
 };
-
-const fallbackConstraints = [
-  { customer: "Global Dynamics", task: "Prepare ROI analysis from Year 1 data", revenue: 320000, tier: "A", age_days: 45 },
-  { customer: "Nexus Health", task: "Demo to selection committee", revenue: 150000, tier: "A", age_days: 30 },
-  { customer: "Summit Partners", task: "Wait for Q2 budget cycle to open", revenue: 75000, tier: "B", age_days: 60 },
-  { customer: "TechFlow Inc", task: "Deliver integration documentation", revenue: 180000, tier: "A", age_days: 22 },
-  { customer: "Acme Corp", task: "Send revised proposal with updated pricing", revenue: 250000, tier: "A", age_days: 14 },
-];
-
-const fallbackAgingRisks = [
-  { title: "Land Initial POC — New Logo Acquisition", customer: "Summit Partners", revenue: 75000, age_days: 68 },
-  { title: "Secure Multi-Year Renewal — Prevent Churn", customer: "Global Dynamics", revenue: 320000, age_days: 45 },
-  { title: "Win Competitive Displacement — Replace Legacy", customer: "Nexus Health", revenue: 150000, age_days: 30 },
-  { title: "Expand Pilot to Full Deployment — 500 Seats", customer: "TechFlow Inc", revenue: 180000, age_days: 22 },
-  { title: "Convert Pilot to Annual Contract", customer: "Beacon Logistics", revenue: 120000, age_days: 18 },
-];
-
-const fallbackSchedule = [
-  { time: "09:00", label: "Acme Corp — Pricing Review" },
-  { time: "11:00", label: "TechFlow — Integration Check-in" },
-  { time: "14:00", label: "Nexus Health — Demo Prep" },
-];
-
-const fallbackActions = [
-  { task: "Send revised proposal with updated pricing", customer: "Acme Corp" },
-  { task: "Run training session for ops team", customer: "TechFlow Inc" },
-  { task: "Prepare ROI analysis from Year 1 data", customer: "Global Dynamics" },
-  { task: "Demo to selection committee", customer: "Nexus Health" },
-  { task: "Schedule executive apology call", customer: "Cortland Manufacturing" },
-  { task: "Draft annual pricing proposal", customer: "Beacon Logistics" },
-];
+const fallbackConstraints: any[] = [];
+const fallbackAgingRisks: any[] = [];
+const fallbackSchedule: any[] = [];
+const fallbackActions: any[] = [];
 
 function formatCurrency(value: number) {
   if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
