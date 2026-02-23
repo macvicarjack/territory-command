@@ -54,6 +54,8 @@ interface DashboardData {
     summary: {
       total_active_outcomes: number;
       total_jack_blockers: number;
+      open_quotes_total: number;
+      backorders_total: number;
     };
     top_constraints: Array<{
       customer: string;
@@ -126,10 +128,10 @@ export default function HitList() {
         {/* Metrics Strip */}
         <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Active Deals", value: active.length, icon: TrendingUp },
-            { label: "Your Blockers", value: jackBlockers, icon: Clock },
-            { label: "Tasks Done", value: `${doneTasks}/${totalTasks}`, icon: CheckCircle2 },
-            { label: "Completion", value: totalTasks ? `${Math.round((doneTasks / totalTasks) * 100)}%` : "0%", icon: Activity },
+            { label: "Active Deals", value: dashboard?.data.summary.total_active_outcomes || 0, icon: TrendingUp },
+            { label: "Your Blockers", value: dashboard?.data.summary.total_jack_blockers || 0, icon: Clock },
+            { label: "Open Quotes", value: dashboard?.data.summary.open_quotes_total || 0, icon: FileText },
+            { label: "Backorders", value: dashboard?.data.summary.backorders_total || 0, icon: Activity },
           ].map((stat) => (
             <div
               key={stat.label}
