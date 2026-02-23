@@ -110,11 +110,13 @@ export default function HitList() {
     retry: 1,
   });
 
+
   const summary = dashboard?.data?.summary || fallbackSummary;
-  const constraints = dashboard?.data?.top_constraints || fallbackConstraints;
-  const agingRisks = dashboard?.data?.aging_risks || fallbackAgingRisks;
-  const schedule = dashboard?.data?.schedule || fallbackSchedule;
-  const actions = dashboard?.data?.action_list || fallbackActions;
+  const constraints = dashboard?.data?.top_constraints || (dashboard ? [] : fallbackConstraints);
+  const agingRisks = dashboard?.data?.aging_risks || (dashboard ? [] : fallbackAgingRisks);
+  const schedule = dashboard?.data?.schedule || (dashboard ? [] : fallbackSchedule);
+  const actions = dashboard?.data?.action_list || (dashboard ? [] : fallbackActions);
+
 
   if (isLoading && !isError) {
     return (
