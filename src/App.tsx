@@ -22,7 +22,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename="/territory-command">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/outcomes" element={<OutcomesPage />} />
