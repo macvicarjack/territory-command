@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 
+const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
+
 interface DashboardData {
   status: string;
   data: {
@@ -42,6 +44,16 @@ interface DashboardData {
   };
 }
 
+interface CalendarEvent {
+  Id: string;
+  Subject: string;
+  StartDateTime: string;
+  EndDateTime: string;
+  Account?: {
+    Name: string;
+  };
+}
+
 const fallbackSummary = {
   open_quotes_total: 0,
   backorders_total: 0,
@@ -71,13 +83,21 @@ function getConstraintDot(age_days?: number) {
   return "bg-yellow-400";
 }
 
-export default function HitList() {
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
-  const { data: dashboard, isLoading, isError } = useQuery<DashboardData>({
+export default function HitList() {
+  const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
     queryFn: async () => {
       console.log("FETCHING FROM N8N...");
-      const res = await fetch("https://course-metadata-bacteria-meet.trycloudflare.com/api/territory/hitlist");
+      const res = await fetch(`${FLASK_TUNNEL}/api/territory/hitlist`);
       if (!res.ok) throw new Error("API error");
       const json = await res.json();
       console.log("API DATA RECEIVED:", json);
@@ -87,7 +107,20 @@ export default function HitList() {
     retry: 1,
   });
 
-
+  // Fetch today's calendar events from Salesforce
+  const today = new Date().toISOString().split("T")[0];
+  const { data: calendarEvents, isLoading: calendarLoading } = useQuery<CalendarEvent[]>({
+    queryKey: ["calendar", today],
+    queryFn: async () => {
+      const res = await fetch(`${FLASK_TUNNEL}/api/salesforce/calendar?start=${today}&end=${today}`);
+      if (!res.ok) throw new Error("Calendar API error");
+      const json = await res.json();
+      return json.events || json.data || [];
+    },
+    refetchInterval: 60000,
+    retry: 1,
+    enabled: !dashboardLoading,
+  });
 
   const summary = dashboard?.data?.summary || fallbackSummary;
   const constraints = dashboard?.data?.top_constraints || (dashboard ? [] : fallbackConstraints);
@@ -95,8 +128,17 @@ export default function HitList() {
   const schedule = dashboard?.data?.schedule || (dashboard ? [] : fallbackSchedule);
   const actions = dashboard?.data?.action_list || (dashboard ? [] : fallbackActions);
 
+  // Use real calendar events if available, otherwise fallback to placeholder schedule
+  const displaySchedule = calendarEvents && calendarEvents.length > 0
+    ? calendarEvents
+        .sort((a, b) => new Date(a.StartDateTime).getTime() - new Date(b.StartDateTime).getTime())
+        .map((event) => ({
+          time: formatTime(event.StartDateTime),
+          label: `${event.Subject}${event.Account ? ` — ${event.Account.Name}` : ""}`,
+        }))
+    : schedule.map((s) => ({ time: s.time, label: s.label }));
 
-  if (isLoading && !isError) {
+  if (dashboardLoading && !dashboardError) {
     return (
       <AppLayout>
         <div className="flex h-[80vh] items-center justify-center">
@@ -164,14 +206,24 @@ export default function HitList() {
           <div className="space-y-4">
             {/* Today's Schedule */}
             <div className="rounded-lg bg-card p-5">
-              <h2 className="mb-4 text-base font-bold text-foreground">Today's Schedule</h2>
+              <h2 className="mb-4 text-base font-bold text-foreground">
+                Today&apos;s Schedule
+                {calendarLoading && <span className="ml-2 text-xs text-muted-foreground">(loading...)</span>}
+                {calendarEvents && calendarEvents.length > 0 && (
+                  <span className="ml-2 text-xs text-emerald-400">({calendarEvents.length} events)</span>
+                )}
+              </h2>
               <div className="space-y-2.5">
-                {schedule.map((s, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="shrink-0 font-mono text-xs font-semibold text-primary">{s.time}</span>
-                    <p className="text-sm text-foreground">{s.label}</p>
-                  </div>
-                ))}
+                {displaySchedule.length > 0 ? (
+                  displaySchedule.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="shrink-0 font-mono text-xs font-semibold text-primary">{s.time}</span>
+                      <p className="text-sm text-foreground">{s.label}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No events scheduled for today</p>
+                )}
               </div>
             </div>
 

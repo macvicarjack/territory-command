@@ -4,7 +4,7 @@ import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Star, AlertCircle, Clock, Loader2 } from "lucide-react";
+import { Star, AlertCircle, Clock, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Task {
@@ -33,6 +33,8 @@ interface DashboardData {
 }
 
 const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
+
+type SortOption = "tier" | "age" | "revenue" | "status";
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
@@ -81,19 +83,22 @@ function getOwnerColor(owner: string): string {
   if (lower === "vendor") {
     return "bg-purple-500/15 text-purple-400 border-purple-500/20";
   }
+  if (lower === "inside sales") {
+    return "bg-cyan-500/15 text-cyan-400 border-cyan-500/20";
+  }
   return "bg-slate-500/15 text-slate-400 border-slate-500/20";
 }
 
 function getTierColor(tier: string): string {
   switch (tier) {
     case "A":
-      return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 font-semibold";
+      return "text-emerald-400";
     case "B":
-      return "bg-blue-500/20 text-blue-400 border-blue-500/30 font-semibold";
+      return "text-blue-400";
     case "C":
-      return "bg-slate-500/20 text-slate-400 border-slate-500/30 font-semibold";
+      return "text-slate-400";
     default:
-      return "bg-slate-500/20 text-slate-400 border-slate-500/30";
+      return "text-slate-400";
   }
 }
 
@@ -106,6 +111,7 @@ function calculateOutcomeAge(outcome: Outcome): number {
 export default function OutcomesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("status");
   const [checkedTasks, setCheckedTasks] = useState<Set<string>>(new Set());
 
   const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
@@ -154,19 +160,40 @@ export default function OutcomesPage() {
       });
     }
 
-    // Sort: At Risk first, then Active, then by revenue descending
+    // Sort based on selected option
     return [...filtered].sort((a, b) => {
-      const statusPriority: Record<string, number> = { at_risk: 0, active: 1, deferred: 2, completed: 3 };
-      const aPriority = statusPriority[a.status] ?? 99;
-      const bPriority = statusPriority[b.status] ?? 99;
-
-      if (aPriority !== bPriority) {
-        return aPriority - bPriority;
+      switch (sortBy) {
+        case "status": {
+          const statusPriority: Record<string, number> = { at_risk: 0, active: 1, deferred: 2, completed: 3 };
+          const aPriority = statusPriority[a.status] ?? 99;
+          const bPriority = statusPriority[b.status] ?? 99;
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          return b.revenue_ytd - a.revenue_ytd;
+        }
+        case "tier": {
+          const tierPriority: Record<string, number> = { A: 0, B: 1, C: 2 };
+          const aPriority = tierPriority[a.tier] ?? 99;
+          const bPriority = tierPriority[b.tier] ?? 99;
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          return b.revenue_ytd - a.revenue_ytd;
+        }
+        case "age": {
+          const aAge = calculateOutcomeAge(a);
+          const bAge = calculateOutcomeAge(b);
+          return bAge - aAge; // Oldest first
+        }
+        case "revenue": {
+          return b.revenue_ytd - a.revenue_ytd; // Highest first
+        }
+        default:
+          return 0;
       }
-
-      return b.revenue_ytd - a.revenue_ytd;
     });
-  }, [outcomes, statusFilter, ownerFilter]);
+  }, [outcomes, statusFilter, ownerFilter, sortBy]);
 
   const toggleTask = (taskId: string) => {
     setCheckedTasks((prev) => {
@@ -247,6 +274,18 @@ export default function OutcomesPage() {
                 </option>
               ))}
             </select>
+
+            {/* Sort Dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="status">Sort: Status</option>
+              <option value="tier">Sort: Tier (A→C)</option>
+              <option value="age">Sort: Age (Oldest First)</option>
+              <option value="revenue">Sort: Revenue (High→Low)</option>
+            </select>
           </div>
         </div>
 
@@ -262,6 +301,12 @@ export default function OutcomesPage() {
                 ? outcome.tasks.find((t) => t.id === outcome.constraint_task_id)
                 : null;
               const outcomeAge = calculateOutcomeAge(outcome);
+              // Reorder tasks: constraint task first, then others
+              const orderedTasks = [...outcome.tasks].sort((a, b) => {
+                if (a.id === outcome.constraint_task_id) return -1;
+                if (b.id === outcome.constraint_task_id) return 1;
+                return 0;
+              });
 
               return (
                 <Card
@@ -271,24 +316,16 @@ export default function OutcomesPage() {
                     outcome.status === "at_risk" && "border-amber-500/30 ring-1 ring-amber-500/20"
                   )}
                 >
-                  <CardHeader className="space-y-3 pb-3">
-                    {/* Customer Name + Badges Row */}
+                  <CardHeader className="space-y-2 pb-3">
+                    {/* Customer Name + Tier/Revenue Row */}
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="text-base font-bold text-foreground line-clamp-1">
                         {outcome.customer_name}
                       </h2>
-                      <div className="flex shrink-0 gap-1.5">
-                        <Badge variant="outline" className={cn("text-xs", getTierColor(outcome.tier))}>
-                          {outcome.tier}
-                        </Badge>
+                      {/* Combined Tier + Revenue - Top Right */}
+                      <div className={cn("shrink-0 text-xs font-medium", getTierColor(outcome.tier))}>
+                        Tier {outcome.tier} · {formatCurrency(outcome.revenue_ytd)} FY26 Rev
                       </div>
-                    </div>
-
-                    {/* Revenue Badge */}
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs font-mono">
-                        {formatCurrency(outcome.revenue_ytd)}
-                      </Badge>
                     </div>
 
                     {/* Outcome Title */}
@@ -307,6 +344,22 @@ export default function OutcomesPage() {
                         <span>{outcomeAge}d</span>
                       </div>
                     </div>
+
+                    {/* Constraint Task - Highlighted at top */}
+                    {constraintTask && (
+                      <div className="mt-2 rounded-md bg-amber-500/10 border border-amber-500/30 p-2.5">
+                        <div className="flex items-center gap-1.5 text-amber-400">
+                          <Lock className="h-3.5 w-3.5" />
+                          <span className="text-[10px] font-bold uppercase tracking-wide">Constraint</span>
+                        </div>
+                        <p className="mt-1 text-xs text-foreground/90">
+                          {constraintTask.description}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          Owner: <span className="text-amber-400/80">{constraintTask.owner}</span>
+                        </p>
+                      </div>
+                    )}
                   </CardHeader>
 
                   <CardContent className="pt-0">
@@ -317,7 +370,7 @@ export default function OutcomesPage() {
 
                       {/* Tasks List */}
                       <div className="space-y-2">
-                        {outcome.tasks.map((task) => {
+                        {orderedTasks.map((task) => {
                           const isConstraint = task.id === outcome.constraint_task_id;
                           const isChecked = task.status === "completed" || checkedTasks.has(task.id);
 
@@ -366,19 +419,6 @@ export default function OutcomesPage() {
                           );
                         })}
                       </div>
-
-                      {/* Constraint Summary */}
-                      {constraintTask && (
-                        <div className="mt-3 rounded-md bg-amber-500/5 border border-amber-500/20 p-2">
-                          <div className="flex items-center gap-1.5 text-[10px] text-amber-400">
-                            <AlertCircle className="h-3 w-3" />
-                            <span className="font-medium uppercase tracking-wide">Current Constraint</span>
-                          </div>
-                          <p className="mt-1 text-xs text-foreground/90 line-clamp-1">
-                            {constraintTask.description}
-                          </p>
-                        </div>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
