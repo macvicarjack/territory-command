@@ -57,7 +57,7 @@ function formatAPIDate(date: Date): string {
 
 // Format date for display in EST
 function formatDisplayDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("en-CA", {
     timeZone: "America/New_York",
     weekday: "short",
     month: "short",
@@ -68,7 +68,7 @@ function formatDisplayDate(date: Date): string {
 // Format time for display in EST
 function formatDisplayTime(isoString: string): string {
   const date = new Date(isoString);
-  return date.toLocaleTimeString("en-US", {
+  return date.toLocaleTimeString("en-CA", {
     timeZone: "America/New_York",
     hour: "numeric",
     minute: "2-digit",
@@ -79,7 +79,7 @@ function formatDisplayTime(isoString: string): string {
 // Get EST date string from ISO
 function getESTDateString(isoString: string): string {
   const date = new Date(isoString);
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("en-CA", {
     timeZone: "America/New_York",
     year: "numeric",
     month: "2-digit",
@@ -366,7 +366,7 @@ export default function CalendarPage() {
               </Button>
             </div>
             <span className="text-lg font-medium text-foreground">
-              {currentDate.toLocaleDateString("en-US", {
+              {currentDate.toLocaleDateString("en-CA", {
                 month: "long",
                 year: "numeric",
               })}
