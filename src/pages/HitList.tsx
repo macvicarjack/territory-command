@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   DollarSign,
@@ -6,8 +6,11 @@ import {
   Target,
   Clock,
   Circle,
+  RefreshCw,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 
 const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
@@ -54,6 +57,10 @@ interface CalendarEvent {
   };
 }
 
+interface RefreshStatus {
+  last_refresh: string;
+}
+
 const fallbackSummary = {
   open_quotes_total: 0,
   backorders_total: 0,
@@ -92,7 +99,32 @@ function formatTime(dateStr: string): string {
   });
 }
 
+function formatLastSync(dateStr?: string): string {
+  if (!dateStr) return "Never synced";
+  
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `Last synced: ${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `Last synced: ${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  
+  const timeStr = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const today = new Date().toDateString();
+  const syncDate = date.toDateString();
+  
+  if (today === syncDate) return `Last synced: Today at ${timeStr}`;
+  return `Last synced: ${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${timeStr}`;
+}
+
 export default function HitList() {
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
   const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
     queryFn: async () => {
@@ -121,6 +153,38 @@ export default function HitList() {
     retry: 1,
     enabled: !dashboardLoading,
   });
+
+  // Fetch refresh status
+  const { data: refreshStatus, refetch: refetchStatus } = useQuery<RefreshStatus>({
+    queryKey: ["refresh-status"],
+    queryFn: async () => {
+      const res = await fetch(`${FLASK_TUNNEL}/api/refresh/status`);
+      if (!res.ok) throw new Error("Refresh status API error");
+      const json = await res.json();
+      return json;
+    },
+    refetchInterval: 60000,
+    retry: 1,
+  });
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`${FLASK_TUNNEL}/api/refresh`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        // Invalidate all react-query caches
+        await queryClient.invalidateQueries();
+        // Refetch refresh status
+        await refetchStatus();
+      }
+    } catch (err) {
+      console.error("Refresh failed:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const summary = dashboard?.data?.summary || fallbackSummary;
   const constraints = dashboard?.data?.top_constraints || (dashboard ? [] : fallbackConstraints);
@@ -151,8 +215,25 @@ export default function HitList() {
   return (
     <AppLayout>
       <div className="p-4 lg:p-6">
-        {/* Header */}
-        <h1 className="mb-5 text-xl font-bold text-foreground">Command Center</h1>
+        {/* Header with Refresh */}
+        <div className="flex items-center justify-between mb-5">
+          <h1 className="text-xl font-bold text-foreground">Command Center</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">
+              {formatLastSync(refreshStatus?.last_refresh)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
+        </div>
 
         {/* KPI Strip */}
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
