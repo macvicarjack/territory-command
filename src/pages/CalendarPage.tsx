@@ -26,8 +26,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
-const FLASK_API = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -187,7 +187,7 @@ export default function CalendarPage() {
     queryKey: ["calendar", dateRange.start, dateRange.end],
     queryFn: async () => {
       const res = await fetch(
-        `${FLASK_API}/api/salesforce/calendar?start=${dateRange.start}&end=${dateRange.end}`
+        `${API_BASE}/api/salesforce/calendar?start=${dateRange.start}&end=${dateRange.end}`
       );
       if (!res.ok) throw new Error("Failed to fetch calendar events");
       return res.json();
@@ -212,7 +212,7 @@ export default function CalendarPage() {
         type: data.type,
       };
 
-      const res = await fetch(`${FLASK_API}/api/salesforce/calendar`, {
+      const res = await fetch(`${API_BASE}/api/salesforce/calendar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

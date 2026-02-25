@@ -1,8 +1,11 @@
+import "leaflet/dist/leaflet.css";
+import * as L from "leaflet";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { X, ExternalLink, Phone, MapPin, Navigation, Search, Route, ChevronRight, Home, Building2, Calendar, Plus, Layers } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { API_BASE } from "@/lib/api";
 
 // ============================================================
 // TYPES
@@ -46,7 +49,6 @@ interface TerritoryData {
 // ============================================================
 // CONSTANTS
 // ============================================================
-const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 const HOME_COORDS: [number, number] = [42.0834, -71.3967];
 const SF_BASE = "https://flowcontrolgroup2021.my.salesforce.com";
 
@@ -109,6 +111,7 @@ function appleMapsUrl(start: [number, number], stops: Account[]): string {
 export default function MapPage() {
   // Refs
   const mapRef = useRef<HTMLDivElement>(null);
+  const [mapDivReady, setMapDivReady] = useState(false);
   const mapInst = useRef<any>(null);
   const sectionLayersRef = useRef<Map<number, any[]>>(new Map());
   const accountMarkersRef = useRef<any[]>([]);
@@ -143,17 +146,29 @@ export default function MapPage() {
     async function load() {
       try {
         const [sectRes, acctRes] = await Promise.all([
-          fetch(`${FLASK_TUNNEL}/api/territory/sections`),
-          fetch(`${FLASK_TUNNEL}/api/salesforce/accounts-geo?territory_only=true`),
+          fetch(`${API_BASE}/api/territory/sections`),
+          fetch(`${API_BASE}/api/salesforce/accounts-geo?territory_only=true`),
         ]);
-        if (!sectRes.ok) throw new Error("Failed to load territory sections");
-        const sectData = await sectRes.json();
+        if (!sectRes.ok) {
+          const errText = await sectRes.text();
+          throw new Error(`Sections API ${sectRes.status}: ${errText.slice(0, 200)}`);
+        }
+        const sectText = await sectRes.text();
+        let sectData;
+        try { sectData = JSON.parse(sectText); } catch (parseErr: any) {
+          throw new Error(`Sections JSON parse error: ${parseErr.message} — response starts with: ${sectText.slice(0, 200)}`);
+        }
         setTerritoryData(sectData);
         if (acctRes.ok) {
-          const acctData = await acctRes.json();
+          const acctText = await acctRes.text();
+          let acctData;
+          try { acctData = JSON.parse(acctText); } catch (parseErr: any) {
+            throw new Error(`Accounts JSON parse error: ${parseErr.message} — response starts with: ${acctText.slice(0, 200)}`);
+          }
           setAccounts(acctData.accounts || []);
         }
       } catch (e: any) {
+        console.error("MapPage load error:", e);
         setError(e.message);
       } finally {
         setLoading(false);
@@ -166,20 +181,27 @@ export default function MapPage() {
   // MAP INIT
   // ============================================================
   useEffect(() => {
-    if (!mapRef.current || !territoryData || mapInst.current) return;
+    console.log("MAP INIT CHECK:", { ref: !!mapRef.current, data: !!territoryData, inst: !!mapInst.current, Ltype: typeof L, Lmap: typeof L.map }); if (!mapRef.current || !territoryData || mapInst.current) return;
     let cancelled = false;
 
-    async function init() {
-      const L = await import("leaflet");
-      await import("leaflet/dist/leaflet.css");
+    async function init() { console.log("MAP INIT RUNNING");
+      
       if (cancelled || !mapRef.current) return;
 
-      const map = L.map(mapRef.current, {
+
+      // Small delay to ensure DOM has dimensions
+      await new Promise(r => setTimeout(r, 50));
+      if (cancelled || !mapRef.current) return;
+
+      console.log("CREATING LEAFLET MAP", L); const map = L.map(mapRef.current, {
         center: territoryData!.territory_bounds.center,
         zoom: territoryData!.territory_bounds.zoom,
         zoomControl: true,
         attributionControl: false,
       });
+
+      // Force invalidate size after mount
+      setTimeout(() => map.invalidateSize(), 100); setTimeout(() => map.invalidateSize(), 500); setTimeout(() => map.invalidateSize(), 1500);
 
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(map);
 
@@ -220,7 +242,7 @@ export default function MapPage() {
     }
     init();
     return () => { cancelled = true; };
-  }, [territoryData]);
+  }, [territoryData, mapDivReady]);
 
   // ============================================================
   // SECTION SELECTION
@@ -253,8 +275,6 @@ export default function MapPage() {
 
     if (pinMode === "off") return;
 
-    const L = (window as any).L;
-    if (!L) return;
 
     const visible = pinMode === "all"
       ? accounts.filter(a => a.lat && a.lng)
@@ -276,8 +296,6 @@ export default function MapPage() {
   // ============================================================
   const highlightAccount = useCallback((account: Account) => {
     if (!mapInst.current || !account.lat || !account.lng) return;
-    const L = (window as any).L;
-    if (!L) return;
     if (highlightMarkerRef.current) mapInst.current.removeLayer(highlightMarkerRef.current);
     highlightMarkerRef.current = L.circleMarker([account.lat, account.lng], {
       radius: 12, color: "#ffffff", fillColor: "#3b82f6", fillOpacity: 0.6, weight: 3,
@@ -290,8 +308,6 @@ export default function MapPage() {
   // ============================================================
   const drawRoute = useCallback((route: Account[]) => {
     if (!mapInst.current) return;
-    const L = (window as any).L;
-    if (!L) return;
     // Clear previous
     if (routeLayerRef.current) mapInst.current.removeLayer(routeLayerRef.current);
     routeMarkersRef.current.forEach(m => mapInst.current.removeLayer(m));
@@ -386,9 +402,9 @@ export default function MapPage() {
 
   return (
     <AppLayout>
-      <div className="relative flex h-[calc(100vh-3rem)]">
+      <div className="relative" style={{ height: "calc(100vh - 3rem)" }}>
         {/* MAP */}
-        <div ref={mapRef} className="flex-1" />
+        <div ref={(el) => { mapRef.current = el; if (el && !mapDivReady) setMapDivReady(true); }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
 
         {/* FLOATING PIN CONTROLS — top right */}
         <div className="absolute top-4 right-4 z-[1000] flex items-center gap-2">

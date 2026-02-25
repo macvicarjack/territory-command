@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
 interface Task {
   id: string;
@@ -27,13 +28,12 @@ interface DashboardData {
   outcomes: Outcome[];
 }
 
-const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 type SortOption = "age" | "owner" | "revenue";
 type GroupOption = "none" | "owner";
 
 async function fetchDashboardData(): Promise<DashboardData> {
-  const response = await fetch(`${FLASK_TUNNEL}/api/territory/dashboard`);
+  const response = await fetch(`${API_BASE}/api/territory/dashboard`);
   if (!response.ok) {
     throw new Error("Failed to fetch dashboard data");
   }

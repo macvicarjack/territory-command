@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { Search, Building2, Package, ClipboardCheck, Plus, Check, Copy, X, Edit3, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
-const FLASK_URL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 // Types
 interface CompanyNote {
@@ -48,17 +48,17 @@ interface ProductCategory {
 
 // API Functions
 const fetchCompanies = async (): Promise<{ companies: { name: string; noteCount: number }[] }> => {
-  const res = await fetch(`${FLASK_URL}/api/notes/company`);
+  const res = await fetch(`${API_BASE}/api/notes/company`);
   return res.json();
 };
 
 const fetchCompanyNotes = async (name: string): Promise<CompanyData> => {
-  const res = await fetch(`${FLASK_URL}/api/notes/company/${encodeURIComponent(name)}`);
+  const res = await fetch(`${API_BASE}/api/notes/company/${encodeURIComponent(name)}`);
   return res.json();
 };
 
 const addCompanyNote = async ({ name, content, tags }: { name: string; content: string; tags: string[] }) => {
-  const res = await fetch(`${FLASK_URL}/api/notes/company/${encodeURIComponent(name)}`, {
+  const res = await fetch(`${API_BASE}/api/notes/company/${encodeURIComponent(name)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, tags }),
@@ -67,27 +67,27 @@ const addCompanyNote = async ({ name, content, tags }: { name: string; content: 
 };
 
 const fetchTemplates = async (): Promise<{ templates: TemplateInfo[] }> => {
-  const res = await fetch(`${FLASK_URL}/api/notes/templates`);
+  const res = await fetch(`${API_BASE}/api/notes/templates`);
   return res.json();
 };
 
 const fetchTemplate = async (type: string): Promise<TemplateData> => {
-  const res = await fetch(`${FLASK_URL}/api/notes/templates/${encodeURIComponent(type)}`);
+  const res = await fetch(`${API_BASE}/api/notes/templates/${encodeURIComponent(type)}`);
   return res.json();
 };
 
 const fetchProducts = async (): Promise<{ categories: ProductCategory[] }> => {
-  const res = await fetch(`${FLASK_URL}/api/notes/products`);
+  const res = await fetch(`${API_BASE}/api/notes/products`);
   return res.json();
 };
 
 const fetchProductCategory = async (category: string): Promise<{ category: string; items: ProductItem[] }> => {
-  const res = await fetch(`${FLASK_URL}/api/notes/products/${encodeURIComponent(category)}`);
+  const res = await fetch(`${API_BASE}/api/notes/products/${encodeURIComponent(category)}`);
   return res.json();
 };
 
 const addProductItem = async ({ category, item }: { category: string; item: Omit<ProductItem, "id" | "createdAt"> }) => {
-  const res = await fetch(`${FLASK_URL}/api/notes/products/${encodeURIComponent(category)}`, {
+  const res = await fetch(`${API_BASE}/api/notes/products/${encodeURIComponent(category)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(item),

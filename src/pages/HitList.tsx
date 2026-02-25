@@ -11,8 +11,8 @@ import {
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/api";
 
-const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 interface DashboardData {
   status: string;
@@ -129,7 +129,7 @@ export default function HitList() {
     queryKey: ["dashboard"],
     queryFn: async () => {
       console.log("FETCHING FROM N8N...");
-      const res = await fetch(`${FLASK_TUNNEL}/api/territory/hitlist`);
+      const res = await fetch(`${API_BASE}/api/territory/hitlist`);
       if (!res.ok) throw new Error("API error");
       const json = await res.json();
       console.log("API DATA RECEIVED:", json);
@@ -144,7 +144,7 @@ export default function HitList() {
   const { data: calendarEvents, isLoading: calendarLoading } = useQuery<CalendarEvent[]>({
     queryKey: ["calendar", today],
     queryFn: async () => {
-      const res = await fetch(`${FLASK_TUNNEL}/api/salesforce/calendar?start=${today}&end=${today}`);
+      const res = await fetch(`${API_BASE}/api/salesforce/calendar?start=${today}&end=${today}`);
       if (!res.ok) throw new Error("Calendar API error");
       const json = await res.json();
       return json.events || json.data || [];
@@ -158,7 +158,7 @@ export default function HitList() {
   const { data: refreshStatus, refetch: refetchStatus } = useQuery<RefreshStatus>({
     queryKey: ["refresh-status"],
     queryFn: async () => {
-      const res = await fetch(`${FLASK_TUNNEL}/api/refresh/status`);
+      const res = await fetch(`${API_BASE}/api/refresh/status`);
       if (!res.ok) throw new Error("Refresh status API error");
       const json = await res.json();
       return json;
@@ -170,7 +170,7 @@ export default function HitList() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const res = await fetch(`${FLASK_TUNNEL}/api/refresh`, {
+      const res = await fetch(`${API_BASE}/api/refresh`, {
         method: "POST",
       });
       if (res.ok) {

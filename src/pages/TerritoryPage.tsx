@@ -3,6 +3,7 @@ import { Search, ArrowUpDown, MapPin, Building2, Phone, Calendar, Briefcase, Fil
 import AppLayout from "@/components/AppLayout";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
 interface Account {
   Id: string;
@@ -39,7 +40,6 @@ interface Account {
 type SortField = 'name' | 'city' | 'state' | 'industry' | 'lastActivity' | 'tier' | 'revenue' | 'section';
 type SortDirection = 'asc' | 'desc';
 
-const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 // Territory Section Mapping
 const SECTION_MAP: Record<number, { name: string; cities: string[] }> = {
@@ -171,9 +171,9 @@ export default function TerritoryPage() {
         setLoading(true);
         
         // Fetch accounts
-        let response = await fetch(`${FLASK_TUNNEL}/api/salesforce/accounts-geo`);
+        let response = await fetch(`${API_BASE}/api/salesforce/accounts-geo`);
         if (!response.ok) {
-          response = await fetch(`${FLASK_TUNNEL}/api/salesforce/accounts`);
+          response = await fetch(`${API_BASE}/api/salesforce/accounts`);
         }
         
         if (!response.ok) {
@@ -184,7 +184,7 @@ export default function TerritoryPage() {
         
         // Try to fetch outcomes for revenue data
         try {
-          const outcomesRes = await fetch(`${FLASK_TUNNEL}/api/territory/quotes-summary`);
+          const outcomesRes = await fetch(`${API_BASE}/api/territory/quotes-summary`);
           if (outcomesRes.ok) {
             const outcomes = await outcomesRes.json();
             // Build revenue lookup by customer name
@@ -205,20 +205,21 @@ export default function TerritoryPage() {
         // Map the account data to expected format
         const mappedAccounts = (data.accounts || []).map((acc: Account) => ({
           ...acc,
-          id: acc.Id,
-          name: acc.Name,
-          street: acc.BillingStreet,
-          city: acc.BillingCity,
-          state: acc.BillingState,
-          zip: acc.BillingPostalCode,
-          lat: acc.BillingLatitude,
-          lng: acc.BillingLongitude,
-          phone: acc.Phone,
-          website: acc.Website,
-          industry: acc.Industry,
-          type: acc.Type,
-          lastActivity: acc.LastActivityDate,
-          revenue: acc.AnnualRevenue || revenueData[acc.Name?.toLowerCase() || '']
+          // Support both uppercase SF fields and lowercase API fields
+          id: acc.id || acc.Id,
+          name: acc.name || acc.Name,
+          street: acc.street || acc.BillingStreet,
+          city: acc.city || acc.BillingCity,
+          state: acc.state || acc.BillingState,
+          zip: acc.zip || acc.BillingPostalCode,
+          lat: acc.lat || acc.BillingLatitude,
+          lng: acc.lng || acc.BillingLongitude,
+          phone: acc.phone || acc.Phone,
+          website: acc.website || acc.Website,
+          industry: acc.industry || acc.Industry,
+          type: acc.type || acc.Type,
+          lastActivity: acc.lastActivity || acc.LastActivityDate,
+          revenue: acc.revenue || acc.AnnualRevenue || revenueData[(acc.name || acc.Name || '').toLowerCase()]
         }));
         
         setAccounts(mappedAccounts);

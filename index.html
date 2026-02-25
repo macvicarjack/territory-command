@@ -21,6 +21,7 @@
 
   <body>
     <div id="root"></div>
+    <script>var r=sessionStorage.getItem("spa-redirect");if(r){sessionStorage.removeItem("spa-redirect");history.replaceState(null,"","/territory-command"+r);}</script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

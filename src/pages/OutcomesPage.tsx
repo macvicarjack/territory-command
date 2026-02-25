@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Star, AlertCircle, Clock, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
 interface Task {
   id: string;
@@ -32,7 +33,6 @@ interface DashboardData {
   outcomes: Outcome[];
 }
 
-const FLASK_TUNNEL = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 type SortOption = "tier" | "age" | "revenue" | "status";
 
@@ -117,7 +117,7 @@ export default function OutcomesPage() {
   const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["outcomes-dashboard"],
     queryFn: async () => {
-      const res = await fetch(`${FLASK_TUNNEL}/api/territory/dashboard`);
+      const res = await fetch(`${API_BASE}/api/territory/dashboard`);
       if (!res.ok) throw new Error("Failed to fetch outcomes");
       return res.json();
     },

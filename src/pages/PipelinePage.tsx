@@ -3,9 +3,9 @@ import AppLayout from "@/components/AppLayout";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, DollarSign, Briefcase, FileText, TrendingUp, Calendar, Building2, Target, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
 // API base URL - uses the Flask tunnel
-const API_BASE = "https://course-metadata-bacteria-meet.trycloudflare.com";
 
 interface Opportunity {
   Id: string;

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>TerritoryHQ</title>
+<script>
+  // GitHub Pages SPA redirect
+  var repo = '/territory-command';
+  var path = location.pathname;
+  if (path.startsWith(repo)) {
+    var route = path.slice(repo.length) || '/';
+    var search = location.search;
+    sessionStorage.setItem('spa-redirect', route + search);
+    location.replace(repo + '/');
+  }
+</script>
+</head>
+<body></body>
+</html>
